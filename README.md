@@ -5,7 +5,7 @@
 conda create -n "cctv"
 conda activate cctv
 pip install -r requirements.txt
-``
+```
 
 2. 실행
 ```
