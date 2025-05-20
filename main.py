@@ -15,7 +15,7 @@ app.add_middleware(
 
 # 샘플 데이터 (DB 대신)
 user_stores_db = {
-    "user1": ["store1", "store2", "store3"],
+    "user1": ["store1", "store2", "store3", "store4"],
     "user2": [],  # 가게 없음
     "user3": ["store4"],
 }
