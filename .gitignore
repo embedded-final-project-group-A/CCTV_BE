@@ -1,0 +1,10 @@
+# Python generated files
+__pycache__/
+*.pyc
+*.so
+*.egg-info/
+.Python
+.pytest_cache/
+
+# OS generated files
+.DS_Store # macOS에서 생성되는 파일
