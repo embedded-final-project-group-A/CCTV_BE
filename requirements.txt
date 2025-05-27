@@ -4,3 +4,5 @@ sqlalchemy
 opencv-python 
 aiofiles
 python-multipart
+pydantic[email]
+bcrypt

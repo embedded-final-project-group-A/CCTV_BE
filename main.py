@@ -1,200 +1,359 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, EmailStr
+from sqlalchemy import create_engine, Column, Integer, String, or_
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import relationship
 from typing import List, Dict, Any
-import os
-from yolo_handler import run_yolo_on_video  # yolo_handler.py가 동일 디렉토리에 있다고 가정
-from pydantic import BaseModel
-from datetime import datetime, timezone
-import threading, time
-import random
+from datetime import datetime
+import sqlite3
+import bcrypt
+import hashlib
 
-# --- Pydantic 모델 정의 ---
-class VideoProcessRequest(BaseModel):
-    video_url: str
-
-class VideoProcessResponse(BaseModel):
-    message: str
-    processed_video_path: str = None
-
-class VideoInfo(BaseModel):
-    date: str
-    type: str
-    videoUrl: str
-
-class Alert(BaseModel):
-    store: str
-    camera: str
-    event: str
-    timestamp: datetime = datetime.now(timezone.utc)
-
+# FastAPI 앱 초기화
 app = FastAPI()
+
+# DB 설정
+DB_PATH = "cctv_system.db"
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+Base = declarative_base()
+SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 개발 단계에서는 "*" 허용, 실제 서비스 시에는 특정 도메인으로 제한
+    allow_origins=["*"],  # 배포 시 수정 권장
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 샘플 데이터 (DB 대신)
-user_stores_db = {
-    "user1": ["store1", "store2", "store3", "store4"],
-    "user2": [],  # 가게 없음
-    "user3": ["store4"],
-}
+# SQLAlchemy 모델
+class User(Base):
+    __tablename__ = "user"
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True)
+    email = Column(String, unique=True)
+    password_hash = Column(String)
 
-dummy_cameras_db = {
-    "store1": [
-        {"label": "Store1 Main Camera", "videoUrl": "http://localhost:8000/videos/test.mp4", "imageUrl": "http://localhost:8000/videos/test_image.png"},
-        {"label": "Store1 Back Camera", "videoUrl": "http://localhost:8000/videos/test.mp4", "imageUrl": "http://localhost:8000/videos/test_image.png"},
-        {"label": "Store1 Entrance Cam", "videoUrl": "http://localhost:8000/videos/test.mp4", "imageUrl": "http://localhost:8000/videos/test_image.png"},
-    ],
-    "store2": [
-        {"label": "Store2 Aisle Cam", "videoUrl": "http://localhost:8000/videos/test.mp4", "imageUrl": "http://localhost:8000/videos/test_image.png"},
-    ],
-    "store3": [
-        {"label": "Store3 Exit Cam", "videoUrl": "http://localhost:8000/videos/test.mp4", "imageUrl": "http://localhost:8000/videos/test_image.png"},
-    ],
-    "store4": [],  # store4는 현재 영상이 없다고 가정
-}
+Base.metadata.create_all(bind=engine)
 
-camera_event_db = {
-    "store1": {
-        "Store1 Main Camera": [
-            {"date": "2023-10-01T12:00:00Z", "type": "도난", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-            {"date": "2023-10-01T12:05:00Z", "type": "유기", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-        ],
-        "Store1 Back Camera": [
-            {"date": "2023-10-01T12:02:00Z", "type": "폭행", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-        ],
-        "Store1 Entrance Cam": [
-            {"date": "2023-10-01T12:07:00Z", "type": "흡연", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-        ]
-    },
-    "store2": {
-        "Store2 Aisle Cam": [
-            {"date": "2023-10-01T12:10:00Z", "type": "폭행", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-        ]
-    },
-    "store3": {
-        "Store3 Exit Cam": [
-            {"date": "2023-10-01T12:15:00Z", "type": "흡연", "videoUrl": "http://localhost:8000/videos/test.mp4"},
-        ]
-    },
-    "store4": {}
-}
+# Pydantic 모델
+class SignUpModel(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
 
+class SignInRequest(BaseModel):
+    identifier: str  # username 또는 email
+    password: str
+
+class VideoInfo(BaseModel):
+    date: str
+    url: str
+    type: str
+    risk_level: str
+
+class UserProfile(BaseModel):
+    id: int
+    username: str
+    email: EmailStr
+
+class Alert(BaseModel):
+    store_id: str
+    camera_id: int
+    message: str
+    timestamp: str
+
+class StoreCreate(BaseModel):
+    user_id: int
+    name: str
+    location: str
+
+class StoreResponse(BaseModel):
+    id: int
+    user_id: int
+    name: str
+    location: str
+
+    class Config:
+        orm_mode = True
+
+class Store(Base):
+    __tablename__ = "store"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    name = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+
+    cameras = relationship("Camera", back_populates="store")
+
+Base.metadata.create_all(bind=engine)
+
+# 의존성: DB 세션
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# SQLite 직접 접근 도우미
+def get_connection():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# 회원가입
+@app.post("/signup")
+def signup(user: SignUpModel, db: Session = Depends(get_db)):
+    # 비밀번호 bcrypt 해싱
+    hashed_pw = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
+
+    new_user = User(username=user.username, email=user.email, password_hash=hashed_pw)
+    try:
+        db.add(new_user)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Username or email already exists.")
+    
+    return {"message": "User created successfully"}
+
+# 로그인
+@app.post("/login")
+def login(req: SignInRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(
+        (User.email == req.identifier) | (User.username == req.identifier)
+    ).first()
+
+    hashed_input_pw = hashlib.sha256(req.password.encode()).hexdigest()
+
+    if not user or user.password_hash != hashed_input_pw:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    return {
+        "message": "Login successful",
+        "username": user.username,
+        "user_id": user.id
+    }
+
+
+# 사용자 ID로 store 목록 조회
 @app.get("/api/user/stores", response_model=List[str])
-async def get_user_stores(user_id: str = Query(..., description="사용자 ID")):
-    stores = user_stores_db.get(user_id)
-    if stores is None:
-        raise HTTPException(status_code=404, detail="User not found")
-    return stores
+def get_user_stores(user_id: str = Query(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM store WHERE user_id = ?", (user_id,))
+    rows = cursor.fetchall()
+    conn.close()
 
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found or no stores")
+    return [row["name"] for row in rows]
 
+# store 이름으로 camera 목록 조회
 @app.get("/api/store/cameras", response_model=List[Dict[str, Any]])
-async def get_store_cameras(store: str = Query(..., description="매장 이름")):
-    """
-    특정 매장에 대한 카메라 목록을 반환합니다.
-    """
-    cameras = dummy_cameras_db.get(store)
-    if cameras is None:
-        return []
-    return cameras
+def get_store_cameras(store: str = Query(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
 
-
-@app.get("/api/store/events", response_model=List[VideoInfo])
-async def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
-    """
-    특정 매장과 카메라 라벨에 대한 이벤트(이상행동 영상) 목록을 반환합니다.
-    """
-    store_cameras = camera_event_db.get(store)
-    if store_cameras is None:
+    cursor.execute("SELECT id FROM store WHERE name = ?", (store,))
+    store_row = cursor.fetchone()
+    if not store_row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Store not found")
 
-    videos = store_cameras.get(camera_label, [])
-    
-    # 날짜를 yyyy-mm-dd 형식으로 변환
-    for video in videos:
-        if "date" in video:
-            try:
-                dt = datetime.fromisoformat(video["date"].replace("Z", "+00:00"))
-                video["date"] = dt.strftime("%Y-%m-%d")
-            except Exception:
-                pass
+    store_id = store_row["id"]
+    cursor.execute("SELECT id, name, video_url, image_url FROM camera WHERE store_id = ?", (store_id,))
+    cameras = [
+        {"id": row["id"], "name": row["name"], "video_url": row["video_url"], "image_url": row["image_url"]}
+        for row in cursor.fetchall()
+    ]
+    conn.close()
+    return cameras
 
+# 이벤트 영상 목록 조회
+@app.get("/api/store/events", response_model=List[VideoInfo])
+def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT id FROM store WHERE name = ?", (store,))
+    store_row = cursor.fetchone()
+    if not store_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Store not found")
+    store_id = store_row["id"]
+
+    cursor.execute("SELECT id FROM camera WHERE store_id = ? AND name = ?", (store_id, camera_label))
+    cam_row = cursor.fetchone()
+    if not cam_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Camera not found")
+    camera_id = cam_row["id"]
+
+    cursor.execute('''
+        SELECT e.event_time, e.video_url, et.type, et.risk_level
+        FROM event e
+        JOIN event_type et ON e.type_id = et.id
+        WHERE e.store_id = ? AND e.camera_id = ?
+        ORDER BY e.event_time DESC
+    ''', (store_id, camera_id))
+
+    videos = []
+    for row in cursor.fetchall():
+        try:
+            formatted_date = datetime.fromisoformat(row["event_time"]).strftime("%Y-%m-%d")
+        except Exception:
+            formatted_date = row["event_time"]
+        videos.append({
+            "date": formatted_date,
+            "url": row["video_url"],
+            "type": row["type"],
+            "risk_level": row["risk_level"]
+        })
+
+    conn.close()
     return videos
 
+# profile
+@app.get("/api/user/profile", response_model=UserProfile)
+def get_user_profile(user_id: int = Query(..., description="User ID"), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return UserProfile(id=user.id, username=user.username, email=user.email)
+
+# 알림 관련 기능
 alerts: List[Alert] = []
 
+# 알림 수신 (프론트에서 사용)
 @app.post("/alerts/")
-async def create_alert(alert: Alert):
+def create_alert(alert: Alert):
     alerts.append(alert)
     return {"message": "Alert received"}
 
+# 알림 목록 조회
 @app.get("/alerts/", response_model=List[Alert])
-async def get_alerts():
+def get_alerts():
     return alerts
 
-# 알림 시뮬레이션 함수: camera_event_db에서 랜덤 알림을 주기적으로 추가
-def simulate_alerts():
-    while True:
-        store = random.choice(list(camera_event_db.keys()))
-        if not camera_event_db[store]:
-            time.sleep(1)
-            continue
-        camera = random.choice(list(camera_event_db[store].keys()))
-        if not camera_event_db[store][camera]:
-            time.sleep(1)
-            continue
-        event_data = random.choice(camera_event_db[store][camera])
+# 테스트용 알림 생성 엔드포인트
+@app.get("/test/notify")
+def test_alert():
+    now = datetime.now().isoformat()
+    alert = Alert(
+        store="TestStore",
+        camera="EntranceCam",
+        event="Loitering",
+        timestamp=now
+    )
+    alerts.append(alert)
+    return {"message": "Test alert generated", "alert": alert}
+
+# Store 등록 API
+@app.post("/api/store/register", response_model=StoreResponse)
+def register_store(store: StoreCreate, db: Session = Depends(get_db)):
+    db_store = Store(**store.dict())
+    db.add(db_store)
+    db.commit()
+    db.refresh(db_store)
+    return db_store
+
+class CameraCreate(BaseModel):
+    user_id: int
+    store_id: int
+    name: str
+    video_url: str
+    image_url: str
+
+    class Config:
+        orm_mode = True
+
+class Camera(Base):
+    __tablename__ = "camera"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    store_id = Column(Integer, ForeignKey("store.id"), nullable=False)
+    name = Column(String, nullable=False)
+    video_url = Column(String, nullable=False)
+    image_url = Column(String, nullable=False)
+
+    store = relationship("Store", back_populates="cameras")
+
+@app.post("/cameras/")
+def create_camera(camera: CameraCreate, db: Session = Depends(get_db)):
+    db_camera = Camera(**camera.dict())
+    db.add(db_camera)
+    db.commit()
+    db.refresh(db_camera)
+    return db_camera
+
+
+
+
+# # 알림 시뮬레이션 함수: camera_event_db에서 랜덤 알림을 주기적으로 추가
+# def simulate_alerts():
+#     while True:
+#         store = random.choice(list(camera_event_db.keys()))
+#         if not camera_event_db[store]:
+#             time.sleep(1)
+#             continue
+#         camera = random.choice(list(camera_event_db[store].keys()))
+#         if not camera_event_db[store][camera]:
+#             time.sleep(1)
+#             continue
+#         event_data = random.choice(camera_event_db[store][camera])
         
-        alert = Alert(
-            store=store,
-            camera=camera,
-            event=event_data["type"],
-            timestamp=datetime.now(timezone.utc)
-        )
-        alerts.append(alert)
-        print(f"Simulated alert: {alert}")
-        time.sleep(10)
+#         alert = Alert(
+#             store=store,
+#             camera=camera,
+#             event=event_data["type"],
+#             timestamp=datetime.now(timezone.utc)
+#         )
+#         alerts.append(alert)
+#         print(f"Simulated alert: {alert}")
+#         time.sleep(10)
 
 
-@app.post("/api/process_local_video", response_model=VideoProcessResponse)
-async def process_local_video(request: VideoProcessRequest):
-    """
-    로컬 네트워크 상의 영상 URL을 받아 YOLO 처리를 시작합니다.
-    """
-    local_video_url = request.video_url
+# @app.post("/api/process_local_video", response_model=VideoProcessResponse)
+# async def process_local_video(request: VideoProcessRequest):
+#     """
+#     로컬 네트워크 상의 영상 URL을 받아 YOLO 처리를 시작합니다.
+#     """
+#     local_video_url = request.video_url
 
-    try:
-        processed_file_path = run_yolo_on_video(local_video_url)
+#     try:
+#         processed_file_path = run_yolo_on_video(local_video_url)
 
-        relative_path = processed_file_path.replace("static/", "/static/")
+#         relative_path = processed_file_path.replace("static/", "/static/")
 
-        return VideoProcessResponse(
-            message=f"로컬 영상 '{local_video_url}' 처리 시작됨.",
-            processed_video_path=relative_path
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"영상 처리 중 오류 발생: {str(e)}")
-
-
-# videos 디렉토리가 없으면 생성
-if not os.path.exists("videos"):
-    os.makedirs("videos")
-# 1. 원본 영상 및 썸네일 파일을 제공하기 위한 마운트 추가
-app.mount("/videos", StaticFiles(directory="videos"), name="videos")
+#         return VideoProcessResponse(
+#             message=f"로컬 영상 '{local_video_url}' 처리 시작됨.",
+#             processed_video_path=relative_path
+#         )
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"영상 처리 중 오류 발생: {str(e)}")
 
 
-# static/clips 디렉토리가 없으면 생성
-if not os.path.exists("static/clips"):
-    os.makedirs("static/clips")
-# 2. 처리된 비디오 파일을 제공하기 위한 마운트
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# # videos 디렉토리가 없으면 생성
+# if not os.path.exists("videos"):
+#     os.makedirs("videos")
+# # 1. 원본 영상 및 썸네일 파일을 제공하기 위한 마운트 추가
+# app.mount("/videos", StaticFiles(directory="videos"), name="videos")
 
-# 데몬 스레드로 시뮬레이션 시작
-threading.Thread(target=simulate_alerts, daemon=True).start()
+
+# # static/clips 디렉토리가 없으면 생성
+# if not os.path.exists("static/clips"):
+#     os.makedirs("static/clips")
+# # 2. 처리된 비디오 파일을 제공하기 위한 마운트
+# app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# # # 데몬 스레드로 시뮬레이션 시작
+# threading.Thread(target=simulate_alerts, daemon=True).start()
