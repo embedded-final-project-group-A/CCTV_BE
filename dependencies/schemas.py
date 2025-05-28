@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 class SignUpModel(BaseModel):
     username: str
@@ -53,7 +54,19 @@ class VideoInfo(BaseModel):
     risk_level: str
 
 class Alert(BaseModel):
-    store_id: str
+    user_id: int
+    store_id: int
     camera_id: int
-    message: str
-    timestamp: str
+    type_id: int
+    event_time: datetime
+    video_url: Optional[str]
+
+    class Config:
+        from_attributes = True
+
+class EventCreate(BaseModel):
+    user_id: int
+    store_id: int
+    camera_id: int
+    type_id: int
+    video_url: Optional[str] = None
