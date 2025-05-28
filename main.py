@@ -5,8 +5,12 @@ from routes.store import store_router
 from routes.camera import camera_router
 from routes.alert import alert_router
 from routes.user import user_router
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI()
+
+# 정적 파일(동영상) 경로 설정
+app.mount("/videos", StaticFiles(directory="videos"), name="videos")
 
 # CORS 설정
 app.add_middleware(
