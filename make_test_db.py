@@ -105,15 +105,15 @@ def insert_sample_data(conn):
 
     # Camera 추가
     cameras = [
-        (user1_id, store1_id, "Main Camera", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/images/store1_main.png"),
-        (user1_id, store1_id, "Back Camera", "http://localhost:8000/videos/store1_back.mp4", "http://localhost:8000/images/store1_back.png"),
-        (user1_id, store1_id, "Entrance Cam", "http://localhost:8000/videos/store1_entrance.mp4", "http://localhost:8000/images/store1_entrance.png"),
-        (user1_id, store2_id, "Aisle Cam", "http://localhost:8000/videos/store2_aisle.mp4", "http://localhost:8000/images/store2_aisle.png"),
-        (user1_id, store3_id, "Exit Cam", "http://localhost:8000/videos/store3_exit.mp4", "http://localhost:8000/images/store3_exit.png"),
-        (user1_id, store4_id, "Parking Lot Cam", "http://localhost:8000/videos/store4_parking.mp4", "http://localhost:8000/images/store4_parking.png"),
-        (user2_id, storeA_id, "Entrance Cam", "http://localhost:8000/videos/storeA_entrance.mp4", "http://localhost:8000/images/storeA_entrance.png"),
-        (user2_id, storeA_id, "Back Cam", "http://localhost:8000/videos/storeA_back.mp4", "http://localhost:8000/images/storeA_back.png"),
-        (user2_id, storeB_id, "Security Cam", "http://localhost:8000/videos/storeB_security.mp4", "http://localhost:8000/images/storeB_security.png")
+        (user1_id, store1_id, "Main Camera", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user1_id, store1_id, "Back Camera", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user1_id, store1_id, "Entrance Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user1_id, store2_id, "Aisle Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user1_id, store3_id, "Exit Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user1_id, store4_id, "Parking Lot Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user2_id, storeA_id, "Entrance Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user2_id, storeA_id, "Back Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png"),
+        (user2_id, storeB_id, "Security Cam", "http://localhost:8000/videos/store1_main.mp4", "http://localhost:8000/videos/store1_main.png")
     ]
     cursor.executemany("INSERT INTO camera (user_id, store_id, name, video_url, image_url) VALUES (?, ?, ?, ?, ?)", cameras)
 
