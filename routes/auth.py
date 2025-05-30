@@ -7,9 +7,13 @@ import bcrypt, hashlib
 
 auth_router = APIRouter()
 
+def hash_password(password: str) -> str:
+    """SHA-256 기반 비밀번호 해시 함수"""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
 @auth_router.post("/signup")
 def signup(user: SignUpModel, db: Session = Depends(get_db)):
-    hashed_pw = bcrypt.hashpw(user.password.encode(), bcrypt.gensalt()).decode()
+    hashed_pw = hash_password(user.password)
     new_user = User(username=user.username, email=user.email, password_hash=hashed_pw)
     try:
         db.add(new_user)

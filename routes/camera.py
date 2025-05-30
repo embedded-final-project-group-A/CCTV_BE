@@ -69,11 +69,18 @@ def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
     return videos
 
 
-# 📌 매장 이름으로 카메라 목록 조회
+# 📌 매장 이름과 userid로 카메라 목록 조회
 @camera_router.get("/api/store/cameras", response_model=List[CameraOut])
-def get_cameras_by_store(store: str, db: Session = Depends(get_db)):
-    store_obj = db.query(Store).filter(Store.name == store).first()
+def get_cameras_by_store(
+    user_id: int = Query(..., description="User ID who owns the store"),
+    store: str = Query(..., description="Store name"),
+    db: Session = Depends(get_db)
+):
+    # 1. user_id와 store 이름으로 Store 객체 찾기
+    store_obj = db.query(Store).filter(Store.user_id == user_id, Store.name == store).first()
     if not store_obj:
-        raise HTTPException(status_code=404, detail="Store not found")
-    
-    return db.query(Camera).filter(Camera.store_id == store_obj.id).all()
+        raise HTTPException(status_code=404, detail="Store not found or user does not own the store")
+
+    # 2. store_id로 카메라 조회
+    cameras = db.query(Camera).filter(Camera.store_id == store_obj.id).all()
+    return cameras
