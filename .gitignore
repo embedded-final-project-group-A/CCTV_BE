@@ -8,3 +8,7 @@ __pycache__/
 
 # OS generated files
 .DS_Store # macOS에서 생성되는 파일
+
+# db
+*.sqlite3
+*.db

@@ -11,6 +11,7 @@ app = FastAPI()
 
 # 정적 파일(동영상) 경로 설정
 app.mount("/videos", StaticFiles(directory="videos"), name="videos")
+app.mount("/output", StaticFiles(directory="output"), name="output")
 
 # CORS 설정
 app.add_middleware(
