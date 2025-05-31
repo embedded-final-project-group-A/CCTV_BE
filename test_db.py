@@ -150,8 +150,8 @@ def insert_sample_data(conn):
 
     # Event 추가
     events = [
-        (user1_id, store1_id, cam1_id, get_type_id("theft"), "http://localhost:8000/output/clips/helmet_clip_32.mp4", "2025-05-27T12:00:00"),
-        (user1_id, store1_id, cam1_id, get_type_id("abandonment"), "http://localhost:8000/output/clips/helmet_clip_0.mp4", "2025-05-26T12:05:00"),
+        (user1_id, store1_id, cam1_id, get_type_id("theft"), "http://localhost:8000/output/clips/helmet_clip_0.mp4", "2025-05-27T12:00:00"),
+        (user1_id, store1_id, cam1_id, get_type_id("abandonment"), "http://localhost:8000/output/clips/helmet_clip_1.mp4", "2025-05-26T12:05:00"),
         (user1_id, store1_id, cam2_id, get_type_id("assault"), "http://localhost:8000/videos/store1_main.mp4", "2025-05-28T12:02:00"),
         (user1_id, store1_id, cam3_id, get_type_id("smoking"), "http://localhost:8000/videos/store1_main.mp4", "2025-05-27T12:07:00"),
         (user1_id, store2_id, cam4_id, get_type_id("assault"), "http://localhost:8000/videos/store1_main.mp4", "2025-05-29T12:10:00"),

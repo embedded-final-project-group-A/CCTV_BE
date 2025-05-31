@@ -9,4 +9,5 @@ bcrypt
 firebase-admin
 torch
 ultralytics
-cv2
+schedule
+opencv-python

@@ -59,7 +59,6 @@ class Event(Base):
 
     event_time = Column(DateTime, default=datetime.utcnow)
     video_url = Column(String, nullable=True)
-    image_url = Column(String, nullable=True) # <--- 이 부분이 추가됨
 
     # 관계 설정: 다른 모델 객체에 접근할 수 있게 해줌
     user = relationship("User")
