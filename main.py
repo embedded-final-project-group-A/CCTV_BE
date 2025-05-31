@@ -6,6 +6,7 @@ from routes.camera import camera_router
 from routes.alert import alert_router
 from routes.user import user_router
 from fastapi.staticfiles import StaticFiles
+from routes.events import router as events_router
 
 app = FastAPI()
 
@@ -28,3 +29,4 @@ app.include_router(store_router)
 app.include_router(camera_router)
 app.include_router(alert_router)
 app.include_router(user_router)
+app.include_router(events_router)
