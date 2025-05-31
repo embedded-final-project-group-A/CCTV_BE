@@ -20,7 +20,7 @@ def register_camera(camera: CameraCreate, db: Session = Depends(get_db)):
     return db_camera
 
 
-# 📌 특정 매장-카메라 조합의 이벤트 정보 조회
+# 특정 매장-카메라 조합의 이벤트 정보 조회
 @camera_router.get("/api/store/events", response_model=List[VideoInfo])
 def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
     conn = get_connection()
@@ -69,7 +69,7 @@ def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
     return videos
 
 
-# 📌 매장 이름과 userid로 카메라 목록 조회
+# 매장 이름과 userid로 카메라 목록 조회
 @camera_router.get("/api/store/cameras", response_model=List[CameraOut])
 def get_cameras_by_store(
     user_id: int = Query(..., description="User ID who owns the store"),
