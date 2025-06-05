@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import BackgroundTasks,APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -7,6 +7,7 @@ import glob
 import threading
 import time
 import schedule
+import subprocess
 
 from firebase_admin import messaging
 
@@ -52,6 +53,19 @@ def create_event(event_data: EventCreate, db: Session = Depends(get_db)):
     db.refresh(event)
     send_fcm_alert(event_data.store_id, event_data.camera_id, event_data.type_id)
     return {"message": "Event saved and alert sent"}
+
+@events_router.post("/api/start-detection/")
+async def start_detection(store_id: int, camera_id: int, background_tasks: BackgroundTasks):
+    def run_detect_script():
+        try:
+            # 예: python detect.py --store 1 --camera 5
+            subprocess.run(["python", "yolo/detect.py"], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Detection script failed: {e}")
+
+    # 백그라운드로 실행
+    background_tasks.add_task(run_detect_script)
+    return {"message": "Detection started"}
 
 def send_fcm_alert(store_id: int, camera_id: int, type_id: int):
     # Firebase 알림 대신 로그만 출력
