@@ -123,39 +123,18 @@ def insert_sample_data(conn):
         result = cursor.fetchone()
         return result[0] if result else None
 
-    cam1_id = get_camera_id(user1_id, store1_id, "Main")
-    cam2_id = get_camera_id(user1_id, store1_id, "Back")
-    cam3_id = get_camera_id(user1_id, store1_id, "Entrance")
-    cam4_id = get_camera_id(user1_id, store2_id, "Aisle")
-    cam5_id = get_camera_id(user1_id, store3_id, "Exit")
-    cam6_id = get_camera_id(user1_id, store4_id, "Parking Lot")
-    cam7_id = get_camera_id(user2_id, storeA_id, "Entrance")
-    cam8_id = get_camera_id(user2_id, storeA_id, "Back")
-    cam9_id = get_camera_id(user2_id, storeB_id, "Security")
-
     # Event type 추가
     event_types = [
         ("theft", "high"),
-        ("abandonment", "medium"),
-        ("assault", "high"),
-        ("smoking", "low")
+        ("fall", "medium"),
+        ("fight", "high"),
+        ("smoke", "low")
     ]
     cursor.executemany("INSERT OR IGNORE INTO event_type (type, risk_level) VALUES (?, ?)", event_types)
 
     def get_type_id(event_type):
         cursor.execute("SELECT id FROM event_type WHERE type = ?", (event_type,))
         return cursor.fetchone()[0]
-
-    # Event 추가
-    events = [
-        (user1_id, store2_id,  cam4_id, get_type_id("theft"), "http://localhost:8000/output/user1/store2/aisle/clips/2025-06-17T22-17-37_theft_clip_0.mp4", "2025-06-17T12:02:00"),
-        (user1_id, store3_id, cam5_id, get_type_id("theft"), "http://localhost:8000/output/user1/store3/exit/clips/2025-06-17T22-17-58_theft_clip_0.mp4", "2025-06-17T12:07:00"),
-    ]
-    for user_id, store_id, cam_id, type_id, video_url, ts in events:
-        cursor.execute(
-            "INSERT INTO event (user_id, store_id, camera_id, type_id, video_url, event_time) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, store_id, cam_id, type_id, video_url, ts)
-        )
 
     conn.commit()
 
