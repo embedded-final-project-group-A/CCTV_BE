@@ -37,7 +37,7 @@ app.include_router(events_router)
 
 # 서버 시작 시 스케줄러 실행
 @app.on_event("startup")
-def startup_event():
+def on_startup():
     start_alert_scheduler()
 
 if __name__ == "__main__":
