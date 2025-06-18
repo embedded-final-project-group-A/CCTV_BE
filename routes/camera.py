@@ -3,9 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 import requests
-from PIL import Image
 import os
-
+import shutil
 from dependencies.db import get_db, get_connection
 from dependencies.schemas import CameraCreate, VideoInfo, CameraOut
 from dependencies.models import Camera, Store, User
@@ -15,32 +14,23 @@ camera_router = APIRouter()
 def sanitize_name(name: str) -> str:
     return name.lower().replace(' ', '_')
 
-import subprocess
-
-def sanitize_name(name: str) -> str:
-    return "".join(c for c in name if c.isalnum() or c in (' ', '_', '-')).rstrip()
-
-def download_file(url, dest_path):
+def download_file(url: str, dest: str) -> bool:
+    import requests
     try:
         response = requests.get(url, stream=True)
         if response.status_code == 200:
-            with open(dest_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=1024):
+            with open(dest, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
             return True
+        return False
     except Exception as e:
-        print(f"Download error: {e}")
-    return False
+        print(f"Download failed: {e}")
+        return False
 
 @camera_router.post("/api/cameras", response_model=CameraOut)
 def register_camera(camera: CameraCreate, db: Session = Depends(get_db)):
-    # DB 저장
-    db_camera = Camera(**camera.dict())
-    db.add(db_camera)
-    db.commit()
-    db.refresh(db_camera)
-
-    # 사용자명, 매장명 조회
+    # 사용자 및 매장 정보 조회
     user = db.query(User).filter(User.id == camera.user_id).first()
     store = db.query(Store).filter(Store.id == camera.store_id).first()
     if not user or not store:
@@ -48,61 +38,69 @@ def register_camera(camera: CameraCreate, db: Session = Depends(get_db)):
 
     username = user.username
     storename = store.name
+    cam_name = sanitize_name(camera.name)
 
-    # 폴더 경로 생성
+    # ---- 폴더 경로 생성 ----
     base_path = os.path.join("videos", username, storename)
     captures_path = os.path.join(base_path, "captures")
     clips_path = os.path.join(base_path, "clips")
+    output_cam_path = os.path.join("output", username, storename, cam_name)
+
     os.makedirs(captures_path, exist_ok=True)
     os.makedirs(clips_path, exist_ok=True)
+    os.makedirs(output_cam_path, exist_ok=True)  # 🔹 output 폴더 생성 추가
 
-    # 파일 이름 처리
-    cam_name = sanitize_name(camera.name)
-    dest_video_path = os.path.join(clips_path, f"{cam_name}.mp4")
     dest_image_path = os.path.join(captures_path, f"{cam_name}.jpg")
+    dest_video_path = os.path.join(clips_path, f"{cam_name}.mp4")
 
-    # ---- 이미지 처리 ----
+    # ---- 이미지 복사 ----
     try:
-        temp_image_path = "temp_image.jpg"
         if camera.image_url.startswith("http"):
+            temp_image_path = "temp_image.jpg"
             if download_file(camera.image_url, temp_image_path):
-                with Image.open(temp_image_path) as img:
-                    img.convert("RGB").save(dest_image_path, "JPEG")
+                shutil.copy2(temp_image_path, dest_image_path)
+                os.remove(temp_image_path)
+            else:
+                print(f"Image download failed: {camera.image_url}")
         elif os.path.exists(camera.image_url):
-            with Image.open(camera.image_url) as img:
-                img.convert("RGB").save(dest_image_path, "JPEG")
+            shutil.copy2(camera.image_url, dest_image_path)
         else:
             print(f"Image not found: {camera.image_url}")
     except Exception as e:
-        print(f"Image error: {e}")
+        print(f"Image copy error: {e}")
 
-    # ---- 비디오 처리 ----
+    # ---- 동영상 복사 ----
     try:
-        temp_video_path = "temp_video.mp4"
-        input_video_path = ""
-
         if camera.video_url.startswith("http"):
+            temp_video_path = "temp_video.mp4"
             if download_file(camera.video_url, temp_video_path):
-                input_video_path = temp_video_path
+                shutil.copy2(temp_video_path, dest_video_path)
+                os.remove(temp_video_path)
+            else:
+                print(f"Video download failed: {camera.video_url}")
         elif os.path.exists(camera.video_url):
-            input_video_path = camera.video_url
+            shutil.copy2(camera.video_url, dest_video_path)
         else:
             print(f"Video not found: {camera.video_url}")
-
-        if input_video_path:
-            cmd = [
-                "ffmpeg", "-y", "-i", input_video_path,
-                "-vcodec", "libx264", "-profile:v", "baseline",
-                "-level", "3.0", "-pix_fmt", "yuv420p",
-                "-acodec", "aac", "-strict", "experimental",
-                dest_video_path
-            ]
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if result.returncode != 0:
-                print(f"FFmpeg error: {result.stderr.decode()}")
-
     except Exception as e:
-        print(f"Video encoding error: {e}")
+        print(f"Video copy error: {e}")
+
+    # ---- HTTP URL 생성 ----
+    http_base = "http://localhost:8000"
+    image_http_url = f"{http_base}/videos/{username}/{storename}/captures/{cam_name}.jpg"
+    video_http_url = f"{http_base}/videos/{username}/{storename}/clips/{cam_name}.mp4"
+
+    # ---- DB 저장 ----
+    db_camera = Camera(
+        user_id=camera.user_id,
+        store_id=camera.store_id,
+        name=camera.name,
+        image_url=image_http_url,
+        video_url=video_http_url,
+    )
+    db.add(db_camera)
+    db.commit()
+    db.refresh(db_camera)
 
     return db_camera
 

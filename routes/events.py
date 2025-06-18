@@ -21,7 +21,7 @@ events_router = APIRouter()
 def get_alerts(request: Request, db: Session = Depends(get_db)):
     user_id = int(request.query_params.get("user_id", 0))
     if user_id not in user_last_login_time:
-        raise HTTPException(status_code=401, detail="User not logged in or session expired")
+        raise HTTPException(status_code=401, detail="Please login first to view alerts.")
 
     login_time = user_last_login_time[user_id]
     events = (
@@ -175,11 +175,15 @@ def run_scheduler():
 
 def start_alert_scheduler(user_id: int, username: str):
     user_output_dir = os.path.join(BASE_OUTPUT_DIR, username)
-    for dirpath, _, filenames in os.walk(user_output_dir):
-        for fname in filenames:
-            if fname.endswith(".mp4") or fname.endswith(".jpg"):
-                abs_path = os.path.abspath(os.path.join(dirpath, fname))
-                processed_files.add(abs_path)
+    if not os.path.exists(user_output_dir):
+        print(f"Output dir not found for user {username}, skipping processed_files init")
+    else:
+        for dirpath, _, filenames in os.walk(user_output_dir):
+            for fname in filenames:
+                if fname.endswith(".mp4") or fname.endswith(".jpg"):
+                    abs_path = os.path.abspath(os.path.join(dirpath, fname))
+                    processed_files.add(abs_path)
 
     thread = threading.Thread(target=run_scheduler, daemon=True)
     thread.start()
+

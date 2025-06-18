@@ -23,11 +23,17 @@ def get_user_stores(user_id: str = Query(...)):
 
 @store_router.get("/api/user/stores/detail")
 def get_user_stores_detail(user_id: str = Query(...)):
+    try:
+        user_id = int(user_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid user_id")
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, name FROM store WHERE user_id = ?", (user_id,))
     rows = cursor.fetchall()
     conn.close()
+
     if not rows:
         raise HTTPException(status_code=404, detail="User not found or no stores")
     return [{"id": row["id"], "name": row["name"]} for row in rows]

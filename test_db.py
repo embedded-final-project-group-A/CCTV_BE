@@ -68,7 +68,6 @@ def insert_sample_data(conn):
     users = [
         ("user1", "user1@example.com", hash_password("password1")),
         ("user2", "user2@example.com", hash_password("password2")),
-
     ]
     cursor.executemany("INSERT INTO user (username, email, password_hash) VALUES (?, ?, ?)", users)
 
@@ -115,14 +114,6 @@ def insert_sample_data(conn):
     ]
     cursor.executemany("INSERT INTO camera (user_id, store_id, name, video_url, image_url) VALUES (?, ?, ?, ?, ?)", cameras)
 
-    def get_camera_id(user_id, store_id, name):
-        cursor.execute(
-            "SELECT id FROM camera WHERE user_id = ? AND store_id = ? AND name = ?",
-            (user_id, store_id, name)
-        )
-        result = cursor.fetchone()
-        return result[0] if result else None
-
     # Event type 추가
     event_types = [
         ("theft", "high"),
@@ -132,9 +123,16 @@ def insert_sample_data(conn):
     ]
     cursor.executemany("INSERT OR IGNORE INTO event_type (type, risk_level) VALUES (?, ?)", event_types)
 
-    def get_type_id(event_type):
-        cursor.execute("SELECT id FROM event_type WHERE type = ?", (event_type,))
-        return cursor.fetchone()[0]
+    conn.commit()
+
+    events = [
+        (1, 3, 5, 1, "2025-06-18 08:46:23.933254", "http://localhost:8000/output/user1/store3/exit/clips/2025-06-18T17-45-52_theft_clip_0.mp4"),
+        (1, 4, 6, 4, "2025-06-18 08:46:54.284087", "http://localhost:8000/output/user1/store4/parking_lot/clips/2025-06-18T17-45-47_smoke_clip_0.mp4")
+    ]
+    cursor.executemany(
+        "INSERT INTO event (user_id, store_id, camera_id, type_id, event_time, video_url) VALUES (?, ?, ?, ?, ?, ?)",
+        events
+    )
 
     conn.commit()
 

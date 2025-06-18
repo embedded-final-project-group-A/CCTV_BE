@@ -100,7 +100,7 @@ def insert_sample_data(conn):
     storeA_id = get_store_id("storeA")
     storeB_id = get_store_id("storeB")
 
-    # Camera 추가 (10.0.2.2 기반 URL)
+    # Camera 추가
     cameras = [
         (user1_id, store1_id, "Main", "http://10.0.2.2:8000/videos/user1/store1/clips/main.mp4", "http://10.0.2.2:8000/videos/user1/store1/captures/main.jpg"),
         (user1_id, store1_id, "Back", "http://10.0.2.2:8000/videos/user1/store1/clips/back.mp4", "http://10.0.2.2:8000/videos/user1/store1/captures/back.jpg"),
@@ -122,6 +122,18 @@ def insert_sample_data(conn):
         ("smoke", "low")
     ]
     cursor.executemany("INSERT OR IGNORE INTO event_type (type, risk_level) VALUES (?, ?)", event_types)
+
+    conn.commit()
+
+    # 이벤트 데이터 추가
+    events = [
+        (1, 3, 5, 1, "2025-06-18 08:46:23.933254", "http://10.0.2.2:8000/output/user1/store3/exit/clips/2025-06-18T17-45-52_theft_clip_0.mp4"),
+        (1, 4, 6, 4, "2025-06-18 08:46:54.284087", "http://10.0.2.2:8000/output/user1/store4/parking_lot/clips/2025-06-18T17-45-47_smoke_clip_0.mp4")
+    ]
+    cursor.executemany(
+        "INSERT INTO event (user_id, store_id, camera_id, type_id, event_time, video_url) VALUES (?, ?, ?, ?, ?, ?)",
+        events
+    )
 
     conn.commit()
 

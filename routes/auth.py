@@ -64,9 +64,11 @@ def login(req: SignInRequest, db: Session = Depends(get_db)):
 
     except Exception as e:
         print(f"Error during YOLO execution: {e}")
+        # 로그인 시간 갱신도 실패할 수 있으니 여기서도 갱신하도록 함
+        events.user_last_login_time[user.id] = datetime.utcnow()
         raise HTTPException(status_code=500, detail="Post login processing failed")
 
-    # 로그인 시간 기록
+    # 로그인 시간 기록 (try-except 밖, 무조건 갱신)
     events.user_last_login_time[user.id] = datetime.utcnow()
 
     return {
@@ -74,3 +76,4 @@ def login(req: SignInRequest, db: Session = Depends(get_db)):
         "username": user.username,
         "user_id": user.id
     }
+
