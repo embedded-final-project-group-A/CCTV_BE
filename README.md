@@ -60,8 +60,6 @@ Here’s the key file structure of the project:
 
 ## 2. Backend Setup and Execution
 
----
-
 ### 📁 Project Setup
 
 **Clone the repository**
@@ -110,7 +108,7 @@ This schema manages users, stores, cameras, event types, and event logs for AI-b
 
 ### Table Overview
 
-<img alt="Database Schema" src="./db_table.png" width="800"/>
+<img alt="Database Schema" src="./README/db_table.png" width="800"/>
 
 </br>
 
@@ -299,5 +297,3 @@ YOLOEventClipper parameters:
 | Store    | `/api/user/stores/detail` | GET    | Get detailed store info                | `user_id` (Query)                                              | `200 OK` – list of stores<br>`400/404` – error                              |
 | Store    | `/api/store/register`     | POST   | Register store & create folder         | JSON `StoreCreate`                                             | `200 OK` – store info<br>`404` – user not found                             |
 | User     | `/api/user/profile`       | GET    | Get user profile                       | `user_id` (Query)                                              | `200 OK` – user profile<br>`404` – not found                                |
-
----
