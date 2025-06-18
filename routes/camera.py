@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 import os
 import shutil
+import subprocess
 from dependencies.db import get_db, get_connection
 from dependencies.schemas import CameraCreate, VideoInfo, CameraOut
 from dependencies.models import Camera, Store, User
@@ -48,7 +49,7 @@ def register_camera(camera: CameraCreate, db: Session = Depends(get_db)):
 
     os.makedirs(captures_path, exist_ok=True)
     os.makedirs(clips_path, exist_ok=True)
-    os.makedirs(output_cam_path, exist_ok=True)  # 🔹 output 폴더 생성 추가
+    os.makedirs(output_cam_path, exist_ok=True)
 
     dest_image_path = os.path.join(captures_path, f"{cam_name}.jpg")
     dest_video_path = os.path.join(clips_path, f"{cam_name}.mp4")
@@ -102,6 +103,19 @@ def register_camera(camera: CameraCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_camera)
 
+    # ---- YOLO 실행 ----
+    try:
+        yolo_script_path = os.path.abspath("yolo/process_videos.py")
+        subprocess.Popen([
+            "python", yolo_script_path,
+            "--video_dir", clips_path,
+            "--output_base", output_cam_path,
+            "--debug"
+        ])
+        print(f"YOLO process started for: {dest_video_path}")
+    except Exception as e:
+        print(f"Failed to start YOLO process: {e}")
+
     return db_camera
 
 # 특정 매장-카메라 조합의 이벤트 정보 조회
@@ -151,7 +165,6 @@ def get_camera_events(store: str = Query(...), camera_label: str = Query(...)):
 
     conn.close()
     return videos
-
 
 # 매장 이름과 userid로 카메라 목록 조회
 @camera_router.get("/api/store/cameras", response_model=List[CameraOut])
