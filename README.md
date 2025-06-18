@@ -137,7 +137,7 @@ This database defines schemas for storing user, store, camera, event type, and e
 ### **Password Hashing**
 Passwords are stored in SHA-256 hash form rather than plain text. The hashing function uses Python's `hashlib` module and is implemented as follows:
 
-```bash
+```python
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 ```
