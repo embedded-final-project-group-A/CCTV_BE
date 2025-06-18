@@ -8,7 +8,6 @@ from dependencies.db import get_db
 from dependencies.models import Event, User, Store, Camera, EventType
 from dependencies.schemas import Alert, EventCreate
 
-
 BASE_OUTPUT_DIR = "output"
 MIN_ALERT_INTERVAL = 1
 processed_files = set()
@@ -16,7 +15,6 @@ last_alert_time_for_auto_event = datetime.min
 last_alert_lock = threading.Lock()
 
 user_last_login_time = {}
-
 events_router = APIRouter()
 
 @events_router.get("/api/user/alerts/", response_model=List[Alert])
@@ -85,36 +83,53 @@ def process_new_video_file(db: Session, video_file_path: str):
         current_time = datetime.utcnow()
         if (current_time - last_alert_time_for_auto_event).total_seconds() < MIN_ALERT_INTERVAL:
             return False
+
     abs_path = os.path.abspath(video_file_path)
     if abs_path in processed_files:
         return False
+
     fname = os.path.basename(video_file_path)
     name_parts = fname.split('_')
     if len(name_parts) < 4:
+        print(f"[process_new_video_file] Unexpected filename format (less than 4 parts): {fname}")
         return False
-    timestamp_str, event_type, _, idx_ext = name_parts
-    index_str = idx_ext.split('.')[0]
-    event_type_map = {"theft": 1, "fall": 2, "fight": 3, "smoke": 4}
-    type_id = event_type_map.get(event_type.lower())
-    if not type_id:
-        return False
-    clips_dir = os.path.dirname(video_file_path)
-    captures_dir = clips_dir.replace("clips", "captures")
-    image_filename = f"{timestamp_str}_{event_type}_capture_{index_str}.jpg"
-    image_path = os.path.join(captures_dir, image_filename)
-    if not os.path.exists(image_path):
-        return False
-    video_url = f"http://localhost:8000/{video_file_path.replace(os.sep, '/')}"
-    image_url = f"http://localhost:8000/{image_path.replace(os.sep, '/')}"
+
     try:
+        # 안전하게 필요한 부분만 추출
+        timestamp_str = name_parts[0]
+        event_type = name_parts[1]
+        idx_ext = name_parts[-1]
+        index_str = idx_ext.split('.')[0]
+
+        event_type_map = {"theft": 1, "fall": 2, "fight": 3, "smoke": 4}
+        type_id = event_type_map.get(event_type.lower())
+        if not type_id:
+            print(f"[process_new_video_file] Unknown event type: {event_type}")
+            return False
+
+        clips_dir = os.path.dirname(video_file_path)
+        captures_dir = clips_dir.replace("clips", "captures")
+        image_filename = f"{timestamp_str}_{event_type}_capture_{index_str}.jpg"
+        image_path = os.path.join(captures_dir, image_filename)
+
+        if not os.path.exists(image_path):
+            print(f"[process_new_video_file] Capture image not found: {image_path}")
+            return False
+
+        video_url = f"http://localhost:8000/{video_file_path.replace(os.sep, '/')}"
+        image_url = f"http://localhost:8000/{image_path.replace(os.sep, '/')}"
+
         user_id, store_id, camera_id = get_ids_from_path(db, video_file_path)
         if not all([user_id, store_id, camera_id]):
+            print(f"[process_new_video_file] Failed to get IDs from path: {video_file_path}")
             return False
+
         existing_event = db.query(Event).filter(Event.video_url == video_url).first()
         if existing_event:
             processed_files.add(abs_path)
             processed_files.add(os.path.abspath(image_path))
             return False
+
         new_event = Event(
             user_id=user_id,
             store_id=store_id,
@@ -126,16 +141,21 @@ def process_new_video_file(db: Session, video_file_path: str):
         db.add(new_event)
         db.commit()
         db.refresh(new_event)
+
         processed_files.add(abs_path)
         processed_files.add(os.path.abspath(image_path))
+
         with last_alert_lock:
             last_alert_time_for_auto_event = datetime.utcnow()
+
         send_fcm_alert(store_id, camera_id, type_id)
         return True
+
     except Exception as e:
-        print(f"Error processing new video file: {e}")
+        print(f"[process_new_video_file] Error processing new video file: {e}")
         db.rollback()
         return False
+
 
 def scan_clips_folder():
     with next(get_db()) as db:
@@ -153,11 +173,13 @@ def run_scheduler():
         schedule.run_pending()
         time.sleep(1)
 
-def start_alert_scheduler():
-    for dirpath, _, filenames in os.walk(BASE_OUTPUT_DIR):
+def start_alert_scheduler(user_id: int, username: str):
+    user_output_dir = os.path.join(BASE_OUTPUT_DIR, username)
+    for dirpath, _, filenames in os.walk(user_output_dir):
         for fname in filenames:
             if fname.endswith(".mp4") or fname.endswith(".jpg"):
                 abs_path = os.path.abspath(os.path.join(dirpath, fname))
                 processed_files.add(abs_path)
+
     thread = threading.Thread(target=run_scheduler, daemon=True)
     thread.start()

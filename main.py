@@ -8,7 +8,7 @@ from routes.auth import auth_router
 from routes.store import store_router
 from routes.camera import camera_router
 from routes.user import user_router
-from routes.events import events_router, start_alert_scheduler  # events_router 이름 확인
+from routes.events import events_router
 
 # DB 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -24,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Static 파일 서비스
+# Static 파일
 app.mount("/videos", StaticFiles(directory="videos"), name="videos")
 app.mount("/output", StaticFiles(directory="output"), name="output")
 
@@ -34,11 +34,6 @@ app.include_router(store_router)
 app.include_router(camera_router)
 app.include_router(user_router)
 app.include_router(events_router)
-
-# 서버 시작 시 스케줄러 실행
-@app.on_event("startup")
-def on_startup():
-    start_alert_scheduler()
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
