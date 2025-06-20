@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, BackgroundTasks, HTTPException
+from fastapi import APIRouter, Depends, Request, BackgroundTasks, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
@@ -186,4 +186,3 @@ def start_alert_scheduler(user_id: int, username: str):
 
     thread = threading.Thread(target=run_scheduler, daemon=True)
     thread.start()
-
